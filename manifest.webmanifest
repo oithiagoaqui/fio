@@ -1,0 +1,10 @@
+{
+  "name": "FIO — guarde o fio para depois",
+  "short_name": "FIO",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4efe5",
+  "theme_color": "#f4efe5",
+  "description": "Apoio visual para retomar tarefas sem perder o contexto.",
+  "icons": []
+}
