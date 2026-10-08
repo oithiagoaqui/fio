@@ -158,42 +158,52 @@ function renderTask(){
   const {t}=found, current=currentIndex(t), n=t.stages.length;
   app.innerHTML=`
     <section class="hero-task">
-      <button class="back-btn" id="back">← Tarefas</button>
+      <div class="task-topline">
+        <button class="back-btn" id="back">← Tarefas</button>
+        <button class="home-task-btn" id="taskHome" aria-label="Ir para o início">⌂ Início</button>
+      </div>
       <div class="task-title"><div class="eyebrow">PROJETO</div><h1>${esc(t.name)}</h1><div class="progress-text">${progress(t)} de ${n} etapas concluídas</div></div>
-      <div class="timeline-wrap" id="timelineWrap">
+
+      <div class="pause-hero">
+        <div>
+          <div class="eyebrow">PONTO DE PARADA</div>
+          <strong>Parei aqui</strong>
+          <span>Guarde onde você está para retomar depois.</span>
+        </div>
+        <button class="pause pause-hero-btn" id="pause">Ⅱ&nbsp; Parei aqui</button>
+      </div>
+
+      <div class="task-focus compact-focus">
+        <div class="eyebrow">VOCÊ ESTÁ AQUI</div>
+        <div class="focus-name">${esc(t.stages[current].name)}</div>
+        <div class="focus-next">${current<n-1 ? 'Próximo: '+esc(t.stages[current+1].name) : 'Última etapa da tarefa'}</div>
+      </div>
+
+      <div class="timeline-wrap">
         <div class="thread-spiral" aria-hidden="true"><span class="thread-segment s1"></span><span class="thread-segment s2"></span><span class="thread-segment s3"></span><span class="thread-segment s4"></span></div>
         <div class="timeline">
-          ${t.stages.map((s,i)=>`<button class="timeline-item ${s.done?'done':''} ${i===current&&!s.done?'current':''}" data-index="${i}">
+          ${t.stages.map((s,i)=>`<button class="timeline-item ${s.done?'done':''} ${i===current&&!s.done?'current':''}" data-index="${i}" aria-label="${esc(s.name)}">
             <span class="timeline-node">${s.done?'✓':i+1}</span>
             <span class="timeline-copy"><strong>${esc(s.name)}</strong><small>${s.done?'concluída':i===current?'você está aqui':'próxima etapa'}</small></span>
           </button>`).join("")}
         </div>
       </div>
-      
-      <div class="task-focus">
-        <div class="eyebrow">VOCÊ ESTÁ AQUI</div>
-        <div class="focus-name">${esc(t.stages[current].name)}</div>
-        <div class="focus-next">${current<n-1 ? 'Próximo: '+esc(t.stages[current+1].name) : 'Última etapa da tarefa'}</div>
-      </div>
-      <div class="task-actions">
-        <button class="primary full" id="complete">${t.stages[current].done ? 'Etapa já concluída' : 'Concluir etapa'}</button>
-        <button class="pause" id="pause">Ⅱ &nbsp; Parei aqui</button>
-      </div>
-      <div class="swipe-note">O FIO guarda o ponto para você retomar depois.</div>
       ${t.stopAt ? `<div class="last-stop"><div class="eyebrow">ÚLTIMO PONTO DE PARADA</div><div>${esc(t.stopNote || 'Ponto de parada registrado.')}</div></div>` : ''}
     </section>`;
 
   document.querySelector("#back").onclick=()=>goBack("tasks");
-  document.querySelectorAll(".timeline-item").forEach(el=>el.onclick=()=>{t.current=Number(el.dataset.index);save();render()});
-  document.querySelector("#complete").onclick=()=>{
-    if(!t.stages[current].done){
-      t.stages[current].done=true;
-      const next=t.stages.findIndex((s,i)=>i>current&&!s.done);
-      if(next>=0)t.current=next;
-      else t.current=t.stages.length-1;
+  document.querySelector("#taskHome").onclick=()=>navigate("tasks");
+  document.querySelectorAll(".timeline-item").forEach(el=>el.onclick=()=>{
+    const index=Number(el.dataset.index);
+    if(index===current && !t.stages[index].done){
+      t.stages[index].done=true;
+      const next=t.stages.findIndex((s,i)=>i>index&&!s.done);
+      t.current=next>=0?next:t.stages.length-1;
       save();render();toast("Etapa concluída. O fio avançou.");
+      return;
     }
-  };
+    t.current=index;save();render();
+  });
   document.querySelector("#pause").onclick=()=>openPause(t,current);
 }
 
@@ -228,24 +238,27 @@ function renderResume(){
   const found=findTask(selectedTask);if(!found){navigate("tasks", null, true);return}
   const {t}=found, current=currentIndex(t);
   app.innerHTML=`<section class="resume">
+    <div class="resume-topline"><button class="back-btn" id="resumeBack">← Tarefas</button><button class="home-task-btn" id="resumeHome">⌂ Início</button></div>
     <div class="resume-kicker">RETOMADA</div>
     <h1>Você estava aqui.</h1>
     <div class="resume-project">${esc(t.name)}</div>
-    <div class="resume-intro">Vamos continuar do ponto que você deixou, sem precisar reconstruir tudo.</div>
+    <div class="resume-note">
+      <div class="resume-note-label">▤ &nbsp; O que você deixou anotado</div>
+      <div class="resume-note-text">${esc(t.stopNote||"Você não deixou uma observação desta vez.")}</div>
+    </div>
+    <div class="resume-next"><span>PRÓXIMO PASSO</span><strong>${esc(t.stages[current]?.name||"Retomar tarefa")}</strong></div>
     <div class="timeline resume-timeline">
       ${t.stages.map((s,i)=>`<div class="timeline-item static ${s.done?'done':''} ${i===current&&!s.done?'current':''}">
         <span class="timeline-node">${s.done?'✓':i+1}</span>
         <span class="timeline-copy"><strong>${esc(s.name)}</strong><small>${s.done?'concluída':i===current?'você está aqui':''}</small></span>
       </div>`).join("")}
     </div>
-    <div class="info-block"><div class="info-title">◷ &nbsp; Próximo passo</div><div class="info-body">${esc(t.stages[current]?.name||"Concluir tarefa")}</div></div>
-    <div class="info-block"><div class="info-title">▤ &nbsp; Para lembrar</div><div class="info-body">${esc(t.stopNote||"Você não deixou uma observação desta vez.")}</div></div>
-    <div class="task-actions" style="margin-top:22px"><button class="primary" id="continue">Continuar</button><button class="secondary" id="editStop">Editar ponto de parada</button></div>
-    <button class="back-btn" id="allTasks">← Ver todas as tarefas</button>
+    <div class="task-actions resume-actions"><button class="primary" id="continue">Continuar</button><button class="secondary" id="editStop">Editar ponto de parada</button></div>
   </section>`;
+  document.querySelector("#resumeBack").onclick=()=>goBack("tasks");
+  document.querySelector("#resumeHome").onclick=()=>navigate("tasks");
   document.querySelector("#continue").onclick=()=>navigate("task",t.id);
   document.querySelector("#editStop").onclick=()=>openPause(t,current);
-  document.querySelector("#allTasks").onclick=()=>navigate("tasks");
 }
 
 function renderData(){

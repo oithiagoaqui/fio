@@ -124,3 +124,12 @@ O manifest separa explicitamente os propósitos `any` e `maskable`.
 - A barra inferior mantém acesso direto a **Tarefas** e **Dados**.
 - O histórico de navegação do próprio FIO usa a History API, permitindo que o botão **Voltar** do Android retorne à tela anterior do FIO em vez de sair imediatamente da aplicação.
 - Ao chegar à página inicial, o comportamento de voltar volta a ser o comportamento normal do navegador/sistema.
+
+
+## Versão 7 — fluxo de tarefa mais direto
+- A observação deixada em **Parei aqui** aparece em destaque na tela de retomada, antes das demais informações.
+- **Parei aqui** fica no topo da tela da tarefa, antes da timeline de etapas.
+- Removido o botão separado de **Concluir etapa**. Para manter a função sem ocupar espaço, tocar na etapa atual a conclui e faz o fio avançar; tocar em outra etapa apenas muda o ponto selecionado.
+- Removida a rolagem interna da timeline: a página usa a rolagem normal do dispositivo.
+- A timeline ficou mais compacta para reduzir a necessidade de rolar.
+- O acesso a **Início** ficou maior e mais visível nas telas de tarefa e retomada.

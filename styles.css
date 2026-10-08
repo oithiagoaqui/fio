@@ -237,3 +237,55 @@ body{overscroll-behavior-y:none}
 .home-btn:hover{color:var(--ink)}
 .home-btn span{font-size:11px}
 @media(max-width:380px){.home-btn span{display:none}.home-btn{font-size:17px;padding:8px 5px}}
+
+/* FIO v7 — fluxo de tarefa mais direto e compacto */
+.task-topline,.resume-topline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.home-task-btn{border:1px solid var(--line);background:rgba(255,255,255,.25);color:var(--ink);font-size:12px;padding:8px 12px;border-radius:4px;white-space:nowrap}
+.home-task-btn:hover{background:rgba(255,255,255,.5)}
+.pause-hero{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:13px 0 8px;padding:11px 12px;border:1px solid rgba(185,101,63,.45);background:rgba(185,101,63,.06);border-radius:5px}
+.pause-hero>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pause-hero strong{font-size:16px;font-weight:600}
+.pause-hero span{font-size:10px;color:var(--muted)}
+.pause-hero-btn{flex:0 0 auto;border-color:var(--clay);background:var(--clay);color:#fff;padding:10px 13px;min-height:38px}
+.compact-focus{margin:5px 0 3px;padding:7px 0;border:0;border-bottom:1px solid var(--line)}
+.compact-focus .focus-name{font-size:16px}
+.compact-focus .focus-next{font-size:9px}
+.timeline-wrap{margin:1px 0 0;padding:0 2px 0 0;max-height:none;min-height:0;overflow:visible;touch-action:auto}
+.timeline{margin-left:8px;padding:2px 0 2px 32px}
+.timeline-item{min-height:47px;padding:3px 4px;gap:11px}
+.timeline-node{width:24px;height:24px;min-width:24px;font-size:9px;box-shadow:0 0 0 3px var(--paper)}
+.timeline-copy{gap:1px}
+.timeline-copy strong{font-size:12px}
+.timeline-copy small{font-size:9px}
+.thread-spiral{left:7px;top:4px;bottom:3px;width:35px;opacity:.7}
+.thread-segment{width:32px;height:48px}
+.thread-segment.s1{top:0}.thread-segment.s2{top:41px}.thread-segment.s3{top:82px}.thread-segment.s4{top:123px}
+.swipe-note{display:none}
+.last-stop{font-size:10px;padding:8px 0;margin-top:5px}
+.resume{padding-top:8px}
+.resume h1{font-size:32px;margin-bottom:3px}
+.resume-project{font-size:18px;margin-top:2px}
+.resume-intro{display:none}
+.resume-note{margin:14px 0 9px;padding:13px 14px;border:1px solid rgba(185,101,63,.5);border-left:4px solid var(--clay);background:rgba(185,101,63,.07);border-radius:4px}
+.resume-note-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--clay-dark);font-weight:600;margin-bottom:6px}
+.resume-note-text{font-size:14px;line-height:1.45;color:var(--ink)}
+.resume-next{display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:7px 0 9px}
+.resume-next span{font-size:9px;letter-spacing:.1em;color:var(--muted)}
+.resume-next strong{font-size:13px;font-weight:500;text-align:right}
+.resume-timeline{margin:7px 0 2px 8px}
+.resume-timeline .timeline-item{min-height:42px}
+.resume-actions{margin-top:8px}
+.resume-actions button{min-height:40px}
+@media(max-width:520px){
+  .pause-hero{align-items:stretch}
+  .pause-hero-btn{padding:9px 11px}
+  .home-task-btn{font-size:11px;padding:8px 10px}
+}
+@media(max-width:380px){
+  .home-btn span{display:inline}
+  .home-btn{font-size:12px;padding:8px 7px}
+  .pause-hero{gap:8px;padding:9px}
+  .pause-hero strong{font-size:14px}
+  .pause-hero span{font-size:9px}
+  .pause-hero-btn{font-size:11px}
+}
