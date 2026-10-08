@@ -11,7 +11,7 @@ O FIO é uma memória externa para não perder o fio de uma tarefa. A pessoa cri
 - Primeiro uso começa vazio, sem tarefa de demonstração.
 - Se existir um ponto de parada salvo, o FIO abre diretamente na tela **“Você estava aqui.”** na próxima abertura.
 - Timeline vertical de etapas, com um elemento visual de fio/espiral.
-- A timeline pode ser arrastada verticalmente para avançar ou voltar entre etapas.
+- A timeline é vertical e pode ser percorrida por rolagem normal; não há gesto de arrastar a linha para mudar de etapa.
 - **Concluir etapa** avança o fio.
 - **Parei aqui** salva o contexto para uma retomada orientada.
 - **Clonar tarefa** cria uma cópia limpa da tarefa.
@@ -90,7 +90,7 @@ Isso significa que, depois de publicado em um endereço HTTPS:
 
 - o navegador pode oferecer **Instalar aplicativo** / **Adicionar à tela inicial**;
 - Android usa o ícone `icons/icon-512.png` / `icons/icon-192.png`;
-- iPhone/iPad usa `icons/apple-touch-icon.png`;
+- iPhone/iPad usa `icons/apple-touch-icon-180.png`;
 - o nome exibido é **FIO**;
 - a abertura instalada usa `display: standalone`, aproximando a experiência de um app;
 - o service worker permite que a interface continue disponível offline depois de carregada;
@@ -99,3 +99,28 @@ Isso significa que, depois de publicado em um endereço HTTPS:
 ### Observação importante
 
 “Adicionar à tela inicial” não transforma o site em um aplicativo nativo. O FIO continua sendo uma aplicação web, mas passa a se comportar visualmente muito mais como um app. Para esta fase do projeto, essa é a abordagem intencional.
+
+
+## Versão 4 — UX enxuta
+- Primeiro uso começa sem tarefa e sem etapas sugeridas.
+- Nenhuma etapa é pré-cadastrada ao criar uma tarefa.
+- **Concluir etapa** e **Parei aqui** ficam no topo da tarefa.
+- A evolução usa uma timeline vertical com um fio visual.
+- **Clonar** e **Excluir** ficam na lista geral de tarefas.
+- A interface foi compactada para reduzir rolagem.
+### Ícones Android e iOS
+
+- Android/PWA: `icon-192-maskable.png` e `icon-512-maskable.png` usam arte final adequada para ícone adaptativo, com a marca dentro da área segura.
+- Android/PWA (ícone normal): `icon-192.png` e `icon-512.png`.
+- iOS/iPadOS: `apple-touch-icon-180.png`, referenciado no HTML. O arquivo é full-bleed para que o sistema aplique o recorte arredondado.
+
+O manifest separa explicitamente os propósitos `any` e `maskable`.
+
+
+## Versão 6 — navegação
+- Removido o gesto de arrastar a linha/timeline para evitar confusão na tela.
+- As etapas continuam acessíveis por toque direto.
+- Botão **Início** fica sempre disponível no cabeçalho.
+- A barra inferior mantém acesso direto a **Tarefas** e **Dados**.
+- O histórico de navegação do próprio FIO usa a History API, permitindo que o botão **Voltar** do Android retorne à tela anterior do FIO em vez de sair imediatamente da aplicação.
+- Ao chegar à página inicial, o comportamento de voltar volta a ser o comportamento normal do navegador/sistema.

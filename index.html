@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="FIO">
   <meta name="format-detection" content="telephone=no">
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
   <meta name="description" content="FIO — guarde o fio para depois. Um apoio visual para retomar tarefas sem perder o contexto.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -23,7 +23,10 @@
         <span class="brand-mark">FIO</span>
         <span class="brand-tag">guarde o fio para depois</span>
       </button>
-      <button class="icon-btn" id="settingsBtn" aria-label="Dados e configurações">⚙</button>
+      <div class="topbar-actions">
+        <button class="home-btn" id="homeBtn" aria-label="Ir para a página inicial">⌂ <span>Início</span></button>
+        <button class="icon-btn" id="settingsBtn" aria-label="Dados e configurações">⚙</button>
+      </div>
     </header>
 
     <main id="app"></main>

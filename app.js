@@ -5,9 +5,42 @@ const EMPTY_DATA = { version: 2, projects: [] };
 let data = load();
 let view = "tasks";
 let selectedTask = null;
-let dragStartY = null;
 let deferredInstallPrompt = null;
 let isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+let historyReady = false;
+let fioHistoryDepth = 0;
+
+function navigate(nextView, taskId=null, replace=false){
+  view = nextView;
+  if(taskId !== null) selectedTask = taskId;
+  const state = { fio:true, view, selectedTask, depth:fioHistoryDepth };
+  if(historyReady){
+    if(replace) history.replaceState({...state, fio:true, depth:fioHistoryDepth}, '', location.href);
+    else { history.pushState({...state, fio:true, depth:fioHistoryDepth+1}, '', location.href); fioHistoryDepth++; }
+  }
+  render();
+}
+
+function goBack(fallback='tasks'){
+  if(historyReady && fioHistoryDepth > 0){
+    history.back();
+  } else {
+    navigate(fallback);
+  }
+}
+
+window.addEventListener('popstate', event => {
+  const state = event.state;
+  if(state?.fio){
+    view = state.view || 'tasks';
+    selectedTask = state.selectedTask || null;
+    fioHistoryDepth = Math.max(0, Number(state.depth)||0);
+    render();
+  } else {
+    // Se o navegador não tiver um estado anterior do FIO, voltamos à página inicial do app.
+    navigate('tasks', null, true);
+  }
+});
 
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
@@ -94,52 +127,38 @@ function renderTasks(){
             <span class="stage-state">${s.done?'concluída':i===idx?'em andamento':''}</span>
           </div>`).join("")}
         </div>
-        <div class="card-actions"><button class="text-btn open-task">Abrir tarefa →</button></div>
+        <div class="card-actions"><button class="text-btn open-task">Abrir tarefa →</button><button class="text-btn clone-task">Clonar</button><button class="text-btn danger-text delete-task">Excluir</button></div>
       </article>`;
     }).join("") : `<div class="empty"><div class="drawing">FIO</div><h2>Por onde começamos?</h2><p class="muted">Crie uma tarefa e divida o caminho em pequenos passos. O FIO não traz tarefas prontas.</p><button class="primary" id="newTaskEmpty">Criar primeira tarefa</button></div>`}
   `;
-  document.querySelector("#newTask")?.addEventListener("click",()=>{view="create";render()});
-  document.querySelector("#newTaskEmpty")?.addEventListener("click",()=>{view="create";render()});
-  document.querySelectorAll(".open-task").forEach(b=>b.addEventListener("click",e=>{
-    selectedTask=e.target.closest(".project-card").dataset.id; view="task"; render();
-  }));
+  document.querySelector("#newTask")?.addEventListener("click",()=>navigate("create"));
+  document.querySelector("#newTaskEmpty")?.addEventListener("click",()=>navigate("create"));
+  document.querySelectorAll(".open-task").forEach(b=>b.addEventListener("click",e=>{const id=e.target.closest(".project-card").dataset.id;navigate("task",id)}));
+  document.querySelectorAll(".clone-task").forEach(b=>b.addEventListener("click",e=>{const id=e.target.closest(".project-card").dataset.id,found=findTask(id);if(!found)return;cloneTask(found.t,found.p,true)}));
+  document.querySelectorAll(".delete-task").forEach(b=>b.addEventListener("click",e=>{const id=e.target.closest(".project-card").dataset.id,found=findTask(id);if(!found)return;deleteTask(found.t,found.p,false)}));
 }
 
 function renderCreate(){
   app.innerHTML=`
     <button class="back-btn" id="back">← Voltar</button>
-    <div class="topline"><div><div class="eyebrow">NOVA TAREFA</div><h1>Comece pelo que precisa fazer.</h1></div></div>
-    <form class="form" id="createForm">
-      <div><label for="taskName">Nome da tarefa ou projeto</label><input id="taskName" required placeholder="Ex.: Preparar orçamento da obra"></div>
-      <div>
-        <label>Etapas</label>
-        <div class="stage-editor" id="stageEditor">
-          ${["Localizar arquivos","Conferir medidas","Preencher planilha","Revisar","Enviar"].map((x,i)=>stageInput(x,i)).join("")}
-        </div>
-        <button type="button" class="text-btn" id="addStage">＋ adicionar etapa</button>
-      </div>
-      <div class="form-actions"><button type="button" class="secondary" id="cancelCreate">Cancelar</button><button class="primary">Começar</button></div>
+    <div class="topline compact-topline"><div><div class="eyebrow">NOVA TAREFA</div><h1>O que você precisa fazer?</h1></div></div>
+    <form class="form compact-form" id="createForm">
+      <div><label for="taskName">Nome da tarefa ou projeto</label><input id="taskName" required placeholder="Digite o nome"></div>
+      <div><label>Etapas</label><p class="field-hint">Adicione apenas as etapas que fizerem sentido para esta tarefa.</p><div class="stage-editor" id="stageEditor"></div><button type="button" class="text-btn add-stage-btn" id="addStage">＋ adicionar etapa</button></div>
+      <div class="form-actions"><button type="button" class="secondary" id="cancelCreate">Cancelar</button><button class="primary">Criar tarefa</button></div>
     </form>`;
-  document.querySelector("#back").onclick=document.querySelector("#cancelCreate").onclick=()=>{view="tasks";render()};
-  document.querySelector("#addStage").onclick=()=>{document.querySelector("#stageEditor").insertAdjacentHTML("beforeend",stageInput("",document.querySelectorAll(".stage-edit").length))};
-  document.querySelector("#createForm").onsubmit=e=>{
-    e.preventDefault();
-    const name=document.querySelector("#taskName").value.trim();
-    const stages=[...document.querySelectorAll(".stage-edit input")].map(x=>x.value.trim()).filter(Boolean).map(n=>({id:crypto.randomUUID(),name:n,done:false}));
-    if(!name||!stages.length){toast("Adicione um nome e pelo menos uma etapa.");return}
-    const task={id:crypto.randomUUID(),name,stages,current:0,stopNote:"",stopAt:null};
-    data.projects.unshift({id:crypto.randomUUID(),name,createdAt:Date.now(),tasks:[task]});
-    save();selectedTask=task.id;view="task";render();
-  };
+  document.querySelector("#back").onclick=document.querySelector("#cancelCreate").onclick=()=>goBack("tasks");
+  document.querySelector("#addStage").onclick=()=>{const ed=document.querySelector("#stageEditor");ed.insertAdjacentHTML("beforeend",stageInput("",document.querySelectorAll(".stage-edit").length));ed.lastElementChild.querySelector("input").focus()};
+  document.querySelector("#createForm").onsubmit=e=>{e.preventDefault();const name=document.querySelector("#taskName").value.trim();const stages=[...document.querySelectorAll(".stage-edit input")].map(x=>x.value.trim()).filter(Boolean).map(n=>({id:crypto.randomUUID(),name:n,done:false}));if(!name){toast("Digite o nome da tarefa.");return}if(!stages.length){toast("Adicione pelo menos uma etapa.");return}const task={id:crypto.randomUUID(),name,stages,current:0,stopNote:"",stopAt:null};data.projects.unshift({id:crypto.randomUUID(),name,createdAt:Date.now(),tasks:[task]});save();selectedTask=task.id;navigate("task", task.id, true)};
 }
 function stageInput(value,i){return `<div class="stage-edit"><input value="${esc(value)}" placeholder="Etapa ${i+1}"><button type="button" class="small-btn" onclick="this.parentElement.remove()">×</button></div>`}
 
 function renderTask(){
-  const found=findTask(selectedTask); if(!found){view="tasks";render();return}
+  const found=findTask(selectedTask); if(!found){navigate("tasks", null, true);return}
   const {t}=found, current=currentIndex(t), n=t.stages.length;
   app.innerHTML=`
     <section class="hero-task">
-      <div class="task-header-row"><button class="back-btn" id="back">← Tarefas</button><div class="task-tools"><button class="tiny-action" id="clone">Clonar</button><button class="tiny-action danger" id="delete">Excluir</button></div></div>
+      <button class="back-btn" id="back">← Tarefas</button>
       <div class="task-title"><div class="eyebrow">PROJETO</div><h1>${esc(t.name)}</h1><div class="progress-text">${progress(t)} de ${n} etapas concluídas</div></div>
       <div class="timeline-wrap" id="timelineWrap">
         <div class="thread-spiral" aria-hidden="true"><span class="thread-segment s1"></span><span class="thread-segment s2"></span><span class="thread-segment s3"></span><span class="thread-segment s4"></span></div>
@@ -150,7 +169,7 @@ function renderTask(){
           </button>`).join("")}
         </div>
       </div>
-      <div class="timeline-hint">Arraste a linha para acompanhar o avanço ou toque em uma etapa.</div>
+      
       <div class="task-focus">
         <div class="eyebrow">VOCÊ ESTÁ AQUI</div>
         <div class="focus-name">${esc(t.stages[current].name)}</div>
@@ -164,9 +183,7 @@ function renderTask(){
       ${t.stopAt ? `<div class="last-stop"><div class="eyebrow">ÚLTIMO PONTO DE PARADA</div><div>${esc(t.stopNote || 'Ponto de parada registrado.')}</div></div>` : ''}
     </section>`;
 
-  document.querySelector("#back").onclick=()=>{view="tasks";render()};
-  document.querySelector("#clone").onclick=()=>cloneTask(t,found.p);
-  document.querySelector("#delete").onclick=()=>deleteTask(t,found.p);
+  document.querySelector("#back").onclick=()=>goBack("tasks");
   document.querySelectorAll(".timeline-item").forEach(el=>el.onclick=()=>{t.current=Number(el.dataset.index);save();render()});
   document.querySelector("#complete").onclick=()=>{
     if(!t.stages[current].done){
@@ -178,36 +195,15 @@ function renderTask(){
     }
   };
   document.querySelector("#pause").onclick=()=>openPause(t,current);
-
-  const wrap=document.querySelector("#timelineWrap");
-  wrap.addEventListener("pointerdown",e=>{dragStartY=e.clientY;wrap.setPointerCapture(e.pointerId)});
-  wrap.addEventListener("pointerup",e=>{
-    if(dragStartY===null)return;
-    const dy=e.clientY-dragStartY;
-    if(Math.abs(dy)>28){
-      const dir=dy<0?1:-1;
-      t.current=Math.max(0,Math.min(n-1,current+dir));save();render();
-    }
-    dragStartY=null;
-  });
 }
 
-function cloneTask(t,p){
-  const copy=structuredClone(t);
-  copy.id=crypto.randomUUID();
-  copy.name=`${t.name} — cópia`;
-  copy.stopAt=null;
-  copy.stopNote="";
-  copy.stages=copy.stages.map(s=>({...s,id:crypto.randomUUID(),done:false}));
-  copy.current=0;
-  p.tasks.push(copy);
-  save();selectedTask=copy.id;view="task";render();toast("Tarefa clonada.");
+function cloneTask(t,p,fromList=false){
+  const copy=structuredClone(t);copy.id=crypto.randomUUID();copy.name=`${t.name} — cópia`;copy.stopAt=null;copy.stopNote="";copy.stages=copy.stages.map(s=>({...s,id:crypto.randomUUID(),done:false}));copy.current=0;p.tasks.push(copy);save();
+  if(fromList){render();toast("Tarefa clonada.")}else{selectedTask=copy.id;navigate("task", copy.id);toast("Tarefa clonada.")}
 }
-function deleteTask(t,p){
+function deleteTask(t,p,fromTask=true){
   if(!confirm(`Excluir “${t.name}”? Esta ação não pode ser desfeita.`)) return;
-  p.tasks=p.tasks.filter(x=>x.id!==t.id);
-  data.projects=data.projects.filter(project=>project.tasks.length);
-  save();selectedTask=null;view="tasks";render();toast("Tarefa excluída.");
+  p.tasks=p.tasks.filter(x=>x.id!==t.id);data.projects=data.projects.filter(project=>project.tasks.length);save();selectedTask=null;navigate("tasks",null);toast("Tarefa excluída.");
 }
 
 function openPause(t,current){
@@ -224,12 +220,12 @@ function openPause(t,current){
     t.current=current;
     t.stopNote=document.querySelector("#pauseNote").value.trim();
     t.stopAt=Date.now();
-    save();modal.close();view="resume";render();
+    save();modal.close();navigate("resume", t.id);
   };
 }
 
 function renderResume(){
-  const found=findTask(selectedTask);if(!found){view="tasks";render();return}
+  const found=findTask(selectedTask);if(!found){navigate("tasks", null, true);return}
   const {t}=found, current=currentIndex(t);
   app.innerHTML=`<section class="resume">
     <div class="resume-kicker">RETOMADA</div>
@@ -247,9 +243,9 @@ function renderResume(){
     <div class="task-actions" style="margin-top:22px"><button class="primary" id="continue">Continuar</button><button class="secondary" id="editStop">Editar ponto de parada</button></div>
     <button class="back-btn" id="allTasks">← Ver todas as tarefas</button>
   </section>`;
-  document.querySelector("#continue").onclick=()=>{view="task";render()};
+  document.querySelector("#continue").onclick=()=>navigate("task",t.id);
   document.querySelector("#editStop").onclick=()=>openPause(t,current);
-  document.querySelector("#allTasks").onclick=()=>{view="tasks";render()};
+  document.querySelector("#allTasks").onclick=()=>navigate("tasks");
 }
 
 function renderData(){
@@ -278,7 +274,7 @@ function renderData(){
       try{
         const imported=JSON.parse(reader.result);
         if(!imported||!Array.isArray(imported.projects))throw new Error();
-        data={version:2,projects:imported.projects};save();view="tasks";selectedTask=null;render();toast("Dados importados com sucesso.");
+        data={version:2,projects:imported.projects};save();navigate("tasks", null);toast("Dados importados com sucesso.");
       }catch{toast("Esse arquivo não parece ser um backup do FIO.")}
     };reader.readAsText(file);
   };
@@ -301,7 +297,7 @@ function renderData(){
   }
 
   document.querySelector("#reset").onclick=()=>{
-    if(confirm("Apagar todos os projetos e tarefas? Esta ação não pode ser desfeita.")){data=structuredClone(EMPTY_DATA);save();view="tasks";selectedTask=null;render();toast("Dados apagados.")}
+    if(confirm("Apagar todos os projetos e tarefas? Esta ação não pode ser desfeita.")){data=structuredClone(EMPTY_DATA);save();navigate("tasks", null);toast("Dados apagados.")}
   };
 }
 
@@ -310,11 +306,15 @@ function startApp(){
   const paused=latestPausedTask();
   if(paused){ selectedTask=paused.id; view="resume"; }
   else view="tasks";
+  history.replaceState({fio:true,view,selectedTask,depth:0},'',location.href);
+  fioHistoryDepth=0;
+  historyReady=true;
   render();
 }
 
-document.querySelector("#brandHome").onclick=()=>{view="tasks";render()};
-document.querySelector("#settingsBtn").onclick=()=>{view="data";render()};
-document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
+document.querySelector("#brandHome").onclick=()=>navigate("tasks");
+document.querySelector("#homeBtn").onclick=()=>navigate("tasks");
+document.querySelector("#settingsBtn").onclick=()=>navigate("data");
+document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>navigate(b.dataset.view));
 
 startApp();

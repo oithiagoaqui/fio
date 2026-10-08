@@ -1,7 +1,7 @@
-const CACHE="fio-v3";
+const CACHE="fio-v6-navigation";
 const ASSETS=[
   "./","./index.html","./styles.css","./app.js","./manifest.webmanifest",
-  "./icons/icon-192.png","./icons/icon-512.png","./icons/apple-touch-icon.png"
+  "./icons/icon-192.png","./icons/icon-512.png","./icons/icon-192-maskable.png","./icons/icon-512-maskable.png","./icons/apple-touch-icon-180.png","./icons/apple-touch-icon.png"
 ];
 self.addEventListener("install",e=>e.waitUntil(
   caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())
