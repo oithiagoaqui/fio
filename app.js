@@ -1,34 +1,23 @@
-const KEY = "fio-data-v1";
+const KEY = "fio-data-v2";
 
-const seed = {
-  version: 1,
-  projects: [{
-    id: crypto.randomUUID(),
-    name: "Orçamento — sala acústica",
-    createdAt: Date.now(),
-    tasks: [{
-      id: crypto.randomUUID(),
-      name: "Orçamento — sala acústica",
-      stages: [
-        {id:crypto.randomUUID(), name:"Arquivos", done:true},
-        {id:crypto.randomUUID(), name:"Medidas (salas 1 a 4)", done:true},
-        {id:crypto.randomUUID(), name:"Sala 5 — conferir medida", done:false},
-        {id:crypto.randomUUID(), name:"Planilha", done:false},
-        {id:crypto.randomUUID(), name:"Revisão", done:false},
-        {id:crypto.randomUUID(), name:"Enviar", done:false}
-      ],
-      current: 2,
-      stopNote: "A medida está na planta impressa.",
-      stopAt: Date.now()
-    }]
-  }]
-};
-
+// Primeiro uso: o FIO começa vazio. Nenhuma tarefa é criada automaticamente.
+const EMPTY_DATA = { version: 2, projects: [] };
 let data = load();
 let view = "tasks";
 let selectedTask = null;
-let wheelOffset = 0;
-let dragStartX = null;
+let dragStartY = null;
+let deferredInstallPrompt = null;
+let isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  isStandalone = true;
+  toast('FIO foi adicionado à tela inicial.');
+});
 
 const app = document.querySelector("#app");
 const modal = document.querySelector("#modal");
@@ -37,23 +26,39 @@ const modalContent = document.querySelector("#modalContent");
 function load(){
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : structuredClone(seed);
-  } catch(e){ return structuredClone(seed); }
+    if (!raw) return structuredClone(EMPTY_DATA);
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.projects)) return structuredClone(EMPTY_DATA);
+    return parsed;
+  } catch(e){ return structuredClone(EMPTY_DATA); }
 }
-function save(){
-  localStorage.setItem(KEY, JSON.stringify(data));
-}
+function save(){ localStorage.setItem(KEY, JSON.stringify(data)); }
 function esc(s=""){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function toast(msg){
-  const el=document.querySelector("#toast"); el.textContent=msg; el.classList.add("show");
+  const el=document.querySelector("#toast");
+  el.textContent=msg; el.classList.add("show");
   setTimeout(()=>el.classList.remove("show"),2200);
 }
 function findTask(id){
-  for(const p of data.projects){ const t=p.tasks.find(t=>t.id===id); if(t) return {p,t}; }
+  for(const p of data.projects){
+    const t=p.tasks.find(t=>t.id===id);
+    if(t) return {p,t};
+  }
 }
 function progress(t){ return t.stages.filter(s=>s.done).length; }
+function allTasks(){ return data.projects.flatMap(p=>p.tasks); }
+function latestPausedTask(){
+  return allTasks()
+    .filter(t=>t.stopAt && t.stages.some(s=>!s.done))
+    .sort((a,b)=>(b.stopAt||0)-(a.stopAt||0))[0] || null;
+}
+function currentIndex(t){
+  const firstOpen=t.stages.findIndex(s=>!s.done);
+  if(firstOpen<0) return t.stages.length-1;
+  return Math.min(Math.max(Number.isInteger(t.current)?t.current:firstOpen,0),t.stages.length-1);
+}
 
 function render(){
   if(view==="tasks") renderTasks();
@@ -61,42 +66,42 @@ function render(){
   if(view==="create") renderCreate();
   if(view==="task") renderTask();
   if(view==="resume") renderResume();
-  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
 }
 
 function renderTasks(){
-  const all=data.projects.flatMap(p=>p.tasks);
-  app.innerHTML = `
+  const all=allTasks();
+  app.innerHTML=`
     <div class="decor"></div>
     <div class="topline">
       <div><div class="eyebrow">SEU ESPAÇO DE TRABALHO</div><h1>Projetos e tarefas</h1></div>
       <button class="plus-link" id="newTask">＋ Nova tarefa</button>
     </div>
     ${all.length ? all.map(t=>{
-      const pr=progress(t), total=t.stages.length;
-      return `<article class="project-card ${t.current<total?'active':''}" data-id="${t.id}">
+      const pr=progress(t), total=t.stages.length, idx=currentIndex(t);
+      return `<article class="project-card ${idx<total?'active':''}" data-id="${t.id}">
         <div class="project-head">
           <div>
             <div class="eyebrow">PROJETO</div>
             <div class="project-name">${esc(t.name)}</div>
             <div class="progress-text">${pr}/${total} etapas</div>
           </div>
-          <div class="mini-orbit">${t.stages.map((s,i)=>`<i class="${s.done?'current':''}"></i>`).join("")}</div>
+          <div class="mini-orbit mini-thread" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
         </div>
         <div class="stage-list">
-          ${t.stages.map((s,i)=>`<div class="stage-row ${s.done?'done':''} ${i===t.current&&!s.done?'current':''}">
+          ${t.stages.map((s,i)=>`<div class="stage-row ${s.done?'done':''} ${i===idx&&!s.done?'current':''}">
             <span class="status">${s.done?'✓':''}</span><span>${esc(s.name)}</span>
-            <span class="stage-state">${s.done?'concluída':i===t.current?'em andamento':''}</span>
+            <span class="stage-state">${s.done?'concluída':i===idx?'em andamento':''}</span>
           </div>`).join("")}
         </div>
         <div class="card-actions"><button class="text-btn open-task">Abrir tarefa →</button></div>
       </article>`;
-    }).join("") : `<div class="empty"><div class="drawing">FIO</div><h2>Nenhuma tarefa ainda.</h2><p class="muted">Crie uma tarefa e divida o caminho em pequenos passos.</p><button class="primary" id="newTaskEmpty">Criar primeira tarefa</button></div>`}
+    }).join("") : `<div class="empty"><div class="drawing">FIO</div><h2>Por onde começamos?</h2><p class="muted">Crie uma tarefa e divida o caminho em pequenos passos. O FIO não traz tarefas prontas.</p><button class="primary" id="newTaskEmpty">Criar primeira tarefa</button></div>`}
   `;
   document.querySelector("#newTask")?.addEventListener("click",()=>{view="create";render()});
   document.querySelector("#newTaskEmpty")?.addEventListener("click",()=>{view="create";render()});
   document.querySelectorAll(".open-task").forEach(b=>b.addEventListener("click",e=>{
-    selectedTask=e.target.closest(".project-card").dataset.id; view="task"; wheelOffset=0; render();
+    selectedTask=e.target.closest(".project-card").dataset.id; view="task"; render();
   }));
 }
 
@@ -131,62 +136,78 @@ function stageInput(value,i){return `<div class="stage-edit"><input value="${esc
 
 function renderTask(){
   const found=findTask(selectedTask); if(!found){view="tasks";render();return}
-  const {t}=found;
-  const n=t.stages.length, current=Math.min(t.current,n-1);
-  const angleStep=360/n;
+  const {t}=found, current=currentIndex(t), n=t.stages.length;
   app.innerHTML=`
     <section class="hero-task">
-      <button class="back-btn" id="back">← Tarefas</button>
-      <div class="task-title"><div class="eyebrow">PROJETO</div><h1>${esc(t.name)}</h1></div>
-      <div class="wheel-wrap" id="wheelWrap">
-        <div class="wheel" id="wheel"></div>
-        <div class="wheel-center">
-          <div>
-            <div class="center-label">${t.stages[current].done?'ETAPA CONCLUÍDA':'VOCÊ ESTÁ AQUI'}</div>
-            <div class="center-main">${esc(t.stages[current].name)}</div>
-            <div class="center-next">${current<n-1 ? 'Próximo: '+esc(t.stages[current+1].name) : 'Última etapa da tarefa'}</div>
-          </div>
+      <div class="task-header-row"><button class="back-btn" id="back">← Tarefas</button><div class="task-tools"><button class="tiny-action" id="clone">Clonar</button><button class="tiny-action danger" id="delete">Excluir</button></div></div>
+      <div class="task-title"><div class="eyebrow">PROJETO</div><h1>${esc(t.name)}</h1><div class="progress-text">${progress(t)} de ${n} etapas concluídas</div></div>
+      <div class="timeline-wrap" id="timelineWrap">
+        <div class="thread-spiral" aria-hidden="true"><span class="thread-segment s1"></span><span class="thread-segment s2"></span><span class="thread-segment s3"></span><span class="thread-segment s4"></span></div>
+        <div class="timeline">
+          ${t.stages.map((s,i)=>`<button class="timeline-item ${s.done?'done':''} ${i===current&&!s.done?'current':''}" data-index="${i}">
+            <span class="timeline-node">${s.done?'✓':i+1}</span>
+            <span class="timeline-copy"><strong>${esc(s.name)}</strong><small>${s.done?'concluída':i===current?'você está aqui':'próxima etapa'}</small></span>
+          </button>`).join("")}
         </div>
       </div>
-      <div class="wheel-hint">Arraste a roda ou use os botões para navegar entre as etapas.</div>
+      <div class="timeline-hint">Arraste a linha para acompanhar o avanço ou toque em uma etapa.</div>
+      <div class="task-focus">
+        <div class="eyebrow">VOCÊ ESTÁ AQUI</div>
+        <div class="focus-name">${esc(t.stages[current].name)}</div>
+        <div class="focus-next">${current<n-1 ? 'Próximo: '+esc(t.stages[current+1].name) : 'Última etapa da tarefa'}</div>
+      </div>
       <div class="task-actions">
         <button class="primary full" id="complete">${t.stages[current].done ? 'Etapa já concluída' : 'Concluir etapa'}</button>
         <button class="pause" id="pause">Ⅱ &nbsp; Parei aqui</button>
       </div>
-      <div class="swipe-note">O aplicativo guarda o ponto para você.</div>
-      <div class="task-meta">
-        <div class="meta-box"><div class="eyebrow">ETAPAS</div><div class="meta-value">${progress(t)} de ${n} concluídas</div></div>
-        <div class="meta-box"><div class="eyebrow">ÚLTIMA PARADA</div><div class="meta-value">${t.stopAt ? new Date(t.stopAt).toLocaleDateString("pt-BR") : "Ainda não registrada"}</div></div>
-      </div>
+      <div class="swipe-note">O FIO guarda o ponto para você retomar depois.</div>
+      ${t.stopAt ? `<div class="last-stop"><div class="eyebrow">ÚLTIMO PONTO DE PARADA</div><div>${esc(t.stopNote || 'Ponto de parada registrado.')}</div></div>` : ''}
     </section>`;
-  const wheel=document.querySelector("#wheel");
-  t.stages.forEach((s,i)=>{
-    const a=(i-current)*angleStep-90;
-    const r=40;
-    const x=50+Math.cos(a*Math.PI/180)*r, y=50+Math.sin(a*Math.PI/180)*r;
-    const node=document.createElement("div");
-    node.className=`wheel-node ${i===current&&!s.done?'current':''} ${s.done?'done':''}`;
-    node.style.left=x+"%";node.style.top=y+"%";
-    node.innerHTML=`<div class="node-dot">${s.done?'✓':i+1}</div><div class="node-label">${esc(s.name)}</div>`;
-    node.onclick=()=>{t.current=i;save();render()};
-    wheel.appendChild(node);
-  });
+
   document.querySelector("#back").onclick=()=>{view="tasks";render()};
+  document.querySelector("#clone").onclick=()=>cloneTask(t,found.p);
+  document.querySelector("#delete").onclick=()=>deleteTask(t,found.p);
+  document.querySelectorAll(".timeline-item").forEach(el=>el.onclick=()=>{t.current=Number(el.dataset.index);save();render()});
   document.querySelector("#complete").onclick=()=>{
-    if(!t.stages[current].done){t.stages[current].done=true;if(current<n-1)t.current=current+1;save();render();toast("Etapa concluída. O fio avançou.");}
+    if(!t.stages[current].done){
+      t.stages[current].done=true;
+      const next=t.stages.findIndex((s,i)=>i>current&&!s.done);
+      if(next>=0)t.current=next;
+      else t.current=t.stages.length-1;
+      save();render();toast("Etapa concluída. O fio avançou.");
+    }
   };
   document.querySelector("#pause").onclick=()=>openPause(t,current);
-  const wrap=document.querySelector("#wheelWrap");
-  wrap.addEventListener("pointerdown",e=>{dragStartX=e.clientX;wrap.setPointerCapture(e.pointerId)});
+
+  const wrap=document.querySelector("#timelineWrap");
+  wrap.addEventListener("pointerdown",e=>{dragStartY=e.clientY;wrap.setPointerCapture(e.pointerId)});
   wrap.addEventListener("pointerup",e=>{
-    if(dragStartX===null)return;
-    const dx=e.clientX-dragStartX;
-    if(Math.abs(dx)>35){
-      const dir=dx<0?1:-1;
-      t.current=Math.max(0,Math.min(n-1,t.current+dir));save();render();
+    if(dragStartY===null)return;
+    const dy=e.clientY-dragStartY;
+    if(Math.abs(dy)>28){
+      const dir=dy<0?1:-1;
+      t.current=Math.max(0,Math.min(n-1,current+dir));save();render();
     }
-    dragStartX=null;
+    dragStartY=null;
   });
+}
+
+function cloneTask(t,p){
+  const copy=structuredClone(t);
+  copy.id=crypto.randomUUID();
+  copy.name=`${t.name} — cópia`;
+  copy.stopAt=null;
+  copy.stopNote="";
+  copy.stages=copy.stages.map(s=>({...s,id:crypto.randomUUID(),done:false}));
+  copy.current=0;
+  p.tasks.push(copy);
+  save();selectedTask=copy.id;view="task";render();toast("Tarefa clonada.");
+}
+function deleteTask(t,p){
+  if(!confirm(`Excluir “${t.name}”? Esta ação não pode ser desfeita.`)) return;
+  p.tasks=p.tasks.filter(x=>x.id!==t.id);
+  data.projects=data.projects.filter(project=>project.tasks.length);
+  save();selectedTask=null;view="tasks";render();toast("Tarefa excluída.");
 }
 
 function openPause(t,current){
@@ -200,40 +221,50 @@ function openPause(t,current){
   modal.showModal();
   document.querySelector("#closeModal").onclick=()=>modal.close();
   document.querySelector("#savePause").onclick=()=>{
-    t.stopNote=document.querySelector("#pauseNote").value.trim();t.stopAt=Date.now();save();modal.close();view="resume";render();
+    t.current=current;
+    t.stopNote=document.querySelector("#pauseNote").value.trim();
+    t.stopAt=Date.now();
+    save();modal.close();view="resume";render();
   };
 }
 
 function renderResume(){
   const found=findTask(selectedTask);if(!found){view="tasks";render();return}
-  const {t}=found, current=Math.min(t.current,t.stages.length-1);
+  const {t}=found, current=currentIndex(t);
   app.innerHTML=`<section class="resume">
-    <button class="back-btn" id="back">← Tarefas</button>
+    <div class="resume-kicker">RETOMADA</div>
     <h1>Você estava aqui.</h1>
     <div class="resume-project">${esc(t.name)}</div>
-    <div class="timeline">
-      ${t.stages.map((s,i)=>`<div class="timeline-item ${s.done?'done':''} ${i===current&&!s.done?'current':''}">
-        <div class="timeline-name">${esc(s.name)}</div>
-        <div class="timeline-state">${s.done?'concluída':i===current?'você está aqui':''}</div>
+    <div class="resume-intro">Vamos continuar do ponto que você deixou, sem precisar reconstruir tudo.</div>
+    <div class="timeline resume-timeline">
+      ${t.stages.map((s,i)=>`<div class="timeline-item static ${s.done?'done':''} ${i===current&&!s.done?'current':''}">
+        <span class="timeline-node">${s.done?'✓':i+1}</span>
+        <span class="timeline-copy"><strong>${esc(s.name)}</strong><small>${s.done?'concluída':i===current?'você está aqui':''}</small></span>
       </div>`).join("")}
     </div>
     <div class="info-block"><div class="info-title">◷ &nbsp; Próximo passo</div><div class="info-body">${esc(t.stages[current]?.name||"Concluir tarefa")}</div></div>
     <div class="info-block"><div class="info-title">▤ &nbsp; Para lembrar</div><div class="info-body">${esc(t.stopNote||"Você não deixou uma observação desta vez.")}</div></div>
     <div class="task-actions" style="margin-top:22px"><button class="primary" id="continue">Continuar</button><button class="secondary" id="editStop">Editar ponto de parada</button></div>
+    <button class="back-btn" id="allTasks">← Ver todas as tarefas</button>
   </section>`;
-  document.querySelector("#back").onclick=()=>{view="tasks";render()};
   document.querySelector("#continue").onclick=()=>{view="task";render()};
   document.querySelector("#editStop").onclick=()=>openPause(t,current);
+  document.querySelector("#allTasks").onclick=()=>{view="tasks";render()};
 }
 
 function renderData(){
   app.innerHTML=`<section class="data-page">
     <div class="eyebrow">SEUS DADOS</div><h1>Dados e backup</h1>
-    <p class="muted">Seus dados ficam neste dispositivo. Faça uma cópia quando quiser.</p>
-    <div class="data-section"><h3>Exportar</h3><p>Cria um arquivo JSON com seus projetos, etapas e pontos de parada.</p><button class="primary" id="export">Exportar meus dados</button></div>
-    <div class="data-section"><h3>Importar</h3><p>Restaura uma cópia anterior. Os dados atuais serão substituídos.</p><label class="file-label">Escolher arquivo JSON<input id="import" type="file" accept="application/json,.json"></label></div>
-    <div class="data-section"><h3>Privacidade</h3><p>O FIO não precisa de conta, login ou banco de dados externo para funcionar. Esta versão guarda os dados no armazenamento local do navegador.</p></div>
-    <div class="data-section"><button class="secondary" id="reset">Restaurar dados de demonstração</button></div>
+    <p class="muted">O FIO não precisa de conta, login ou banco de dados externo.</p>
+    <div class="data-section"><h3>Exportar seus dados</h3><p>Os dados ficam armazenados localmente no navegador, no armazenamento/cache local do dispositivo. Se você limpar os dados ou o cache do navegador, eles podem ser apagados. <strong>É uma boa ideia fazer um backup de vez em quando.</strong></p><button class="primary" id="export">Exportar meus dados</button></div>
+    <div class="data-section"><h3>Importar dados</h3><p>Escolha um backup que você já tenha exportado. Normalmente ele estará na pasta <strong>Downloads</strong> do computador ou celular. O nome será parecido com <strong>fio-backup-2026-10-06.json</strong>.</p><label class="file-label">Escolher arquivo JSON<input id="import" type="file" accept="application/json,.json"></label></div>
+    <div class="data-section" id="installSection">
+      <h3>Usar como aplicativo</h3>
+      <p>O FIO pode ser colocado na tela inicial do celular com um ícone próprio. Depois disso, ele abre em uma janela própria, sem a aparência de uma página comum do navegador.</p>
+      <div id="installArea"></div>
+    </div>
+    <div class="data-section" id="privacySection"><h3>Privacidade</h3><p>O FIO foi pensado para funcionar localmente. Esta versão não envia seus projetos para um servidor.</p></div>
+    <div class="data-section"><button class="secondary" id="reset">Apagar todos os dados</button></div>
   </section>`;
   document.querySelector("#export").onclick=()=>{
     const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
@@ -246,18 +277,44 @@ function renderData(){
     reader.onload=()=>{
       try{
         const imported=JSON.parse(reader.result);
-        if(!imported.projects||!Array.isArray(imported.projects))throw new Error();
-        data=imported;save();view="tasks";render();toast("Dados importados com sucesso.");
+        if(!imported||!Array.isArray(imported.projects))throw new Error();
+        data={version:2,projects:imported.projects};save();view="tasks";selectedTask=null;render();toast("Dados importados com sucesso.");
       }catch{toast("Esse arquivo não parece ser um backup do FIO.")}
     };reader.readAsText(file);
   };
+  const installArea=document.querySelector("#installArea");
+  if(isStandalone){
+    installArea.innerHTML='<p class="install-status">✓ O FIO já está instalado como aplicativo neste dispositivo.</p>';
+  } else if(deferredInstallPrompt){
+    installArea.innerHTML='<button class="primary" id="installApp">Adicionar FIO à tela inicial</button>';
+    document.querySelector("#installApp").onclick=async()=>{
+      deferredInstallPrompt.prompt();
+      const choice=await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt=null;
+      if(choice.outcome==="accepted") toast("Instalação iniciada.");
+    };
+  } else {
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    installArea.innerHTML=ios
+      ? '<div class="install-guide"><strong>No iPhone/iPad:</strong> toque em <strong>Compartilhar</strong> no Safari e escolha <strong>Adicionar à Tela de Início</strong>.</div>'
+      : '<div class="install-guide"><strong>No Android:</strong> abra o menu do navegador (⋮) e procure <strong>Adicionar à tela inicial</strong> ou <strong>Instalar aplicativo</strong>.</div>';
+  }
+
   document.querySelector("#reset").onclick=()=>{
-    if(confirm("Restaurar o exemplo? Os dados atuais serão substituídos.")){data=structuredClone(seed);save();view="tasks";render();toast("Demonstração restaurada.")}
+    if(confirm("Apagar todos os projetos e tarefas? Esta ação não pode ser desfeita.")){data=structuredClone(EMPTY_DATA);save();view="tasks";selectedTask=null;render();toast("Dados apagados.")}
   };
+}
+
+function startApp(){
+  // Retomada orientada: se existe um ponto de parada, ele vira a primeira tela na reabertura.
+  const paused=latestPausedTask();
+  if(paused){ selectedTask=paused.id; view="resume"; }
+  else view="tasks";
+  render();
 }
 
 document.querySelector("#brandHome").onclick=()=>{view="tasks";render()};
 document.querySelector("#settingsBtn").onclick=()=>{view="data";render()};
 document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});
 
-render();
+startApp();
