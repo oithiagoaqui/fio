@@ -9,6 +9,7 @@ let deferredInstallPrompt = null;
 let isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 let historyReady = false;
 let fioHistoryDepth = 0;
+let taskTab = "active";
 
 function navigate(nextView, taskId=null, replace=false){
   view = nextView;
@@ -84,7 +85,7 @@ function progress(t){ return t.stages.filter(s=>s.done).length; }
 function allTasks(){ return data.projects.flatMap(p=>p.tasks); }
 function latestPausedTask(){
   return allTasks()
-    .filter(t=>t.stopAt && t.stages.some(s=>!s.done))
+    .filter(t=>!t.completed && t.stopAt && t.stages.some(s=>!s.done))
     .sort((a,b)=>(b.stopAt||0)-(a.stopAt||0))[0] || null;
 }
 function currentIndex(t){
@@ -104,37 +105,47 @@ function render(){
 
 function renderTasks(){
   const all=allTasks();
+  const active=all.filter(t=>t.completed!==true);
+  const completed=all.filter(t=>t.completed===true);
+  const shown=taskTab==="completed"?completed:active;
   app.innerHTML=`
     <div class="decor"></div>
     <div class="topline">
       <div><div class="eyebrow">SEU ESPAÇO DE TRABALHO</div><h1>Projetos e tarefas</h1></div>
       <button class="plus-link" id="newTask">＋ Nova tarefa</button>
     </div>
-    ${all.length ? all.map(t=>{
+    <div class="task-tabs" role="tablist" aria-label="Filtrar tarefas">
+      <button class="task-tab ${taskTab==='active'?'selected':''}" id="activeTab" role="tab" aria-selected="${taskTab==='active'}">Em andamento <span>${active.length}</span></button>
+      <button class="task-tab ${taskTab==='completed'?'selected':''}" id="completedTab" role="tab" aria-selected="${taskTab==='completed'}">Concluídas <span>${completed.length}</span></button>
+    </div>
+    ${shown.length ? shown.map(t=>{
       const pr=progress(t), total=t.stages.length, idx=currentIndex(t);
-      return `<article class="project-card ${idx<total?'active':''}" data-id="${t.id}">
+      return `<article class="project-card ${t.completed?'completed-card':'active'}" data-id="${t.id}">
         <div class="project-head">
           <div>
-            <div class="eyebrow">PROJETO</div>
+            <div class="eyebrow">${t.completed?'TAREFA CONCLUÍDA':'TAREFA'}</div>
             <div class="project-name">${esc(t.name)}</div>
-            <div class="progress-text">${pr}/${total} etapas</div>
+            <div class="progress-text">${pr}/${total} etapas concluídas${t.completedAt?` · concluída em ${new Date(t.completedAt).toLocaleDateString('pt-BR')}`:''}</div>
           </div>
           <div class="mini-orbit mini-thread" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
         </div>
         <div class="stage-list">
           ${t.stages.map((s,i)=>`<div class="stage-row ${s.done?'done':''} ${i===idx&&!s.done?'current':''}">
             <span class="status">${s.done?'✓':''}</span><span>${esc(s.name)}</span>
-            <span class="stage-state">${s.done?'concluída':i===idx?'em andamento':''}</span>
+            <span class="stage-state">${s.done?'concluída':i===idx&&!t.completed?'em andamento':''}</span>
           </div>`).join("")}
         </div>
-        <div class="card-actions"><button class="text-btn open-task">Abrir tarefa →</button><button class="text-btn clone-task">Clonar</button><button class="text-btn danger-text delete-task">Excluir</button></div>
+        <div class="card-actions"><button class="text-btn open-task">${t.completed?'Ver tarefa':'Abrir tarefa →'}</button>${t.completed?'<button class="text-btn reopen-task">Reabrir tarefa</button>':'<button class="text-btn clone-task">Clonar</button>'}<button class="text-btn danger-text delete-task">Excluir</button></div>
       </article>`;
-    }).join("") : `<div class="empty"><div class="drawing">FIO</div><h2>Por onde começamos?</h2><p class="muted">Crie uma tarefa e divida o caminho em pequenos passos. O FIO não traz tarefas prontas.</p><button class="primary" id="newTaskEmpty">Criar primeira tarefa</button></div>`}
+    }).join("") : `<div class="empty"><div class="drawing">FIO</div><h2>${taskTab==='completed'?'Nenhuma tarefa concluída ainda':'Por onde começamos?'}</h2><p class="muted">${taskTab==='completed'?'Quando você concluir uma tarefa, ela ficará guardada aqui.':'Crie uma tarefa e divida o caminho em pequenos passos. O FIO não traz tarefas prontas.'}</p>${taskTab==='active'?'<button class="primary" id="newTaskEmpty">Criar primeira tarefa</button>':''}</div>`}
   `;
   document.querySelector("#newTask")?.addEventListener("click",()=>navigate("create"));
   document.querySelector("#newTaskEmpty")?.addEventListener("click",()=>navigate("create"));
+  document.querySelector("#activeTab").onclick=()=>{taskTab="active";renderTasks()};
+  document.querySelector("#completedTab").onclick=()=>{taskTab="completed";renderTasks()};
   document.querySelectorAll(".open-task").forEach(b=>b.addEventListener("click",e=>{const id=e.target.closest(".project-card").dataset.id;navigate("task",id)}));
   document.querySelectorAll(".clone-task").forEach(b=>b.addEventListener("click",e=>{const id=e.target.closest(".project-card").dataset.id,found=findTask(id);if(!found)return;cloneTask(found.t,found.p,true)}));
+  document.querySelectorAll(".reopen-task").forEach(b=>b.addEventListener("click",e=>{const id=e.target.closest(".project-card").dataset.id,found=findTask(id);if(!found)return;found.t.completed=false;delete found.t.completedAt;taskTab="active";save();renderTasks();toast("Tarefa reaberta.")}));
   document.querySelectorAll(".delete-task").forEach(b=>b.addEventListener("click",e=>{const id=e.target.closest(".project-card").dataset.id,found=findTask(id);if(!found)return;deleteTask(found.t,found.p,false)}));
 }
 
@@ -162,7 +173,7 @@ function renderTask(){
         <button class="back-btn" id="back">← Tarefas</button>
         <button class="home-task-btn" id="taskHome" aria-label="Ir para o início">⌂ Início</button>
       </div>
-      <div class="task-title"><div class="eyebrow">PROJETO</div><h1>${esc(t.name)}</h1><div class="progress-text">${progress(t)} de ${n} etapas concluídas</div></div>
+      <div class="task-title"><div class="eyebrow">PROJETO</div><h1>${esc(t.name)}</h1><div class="progress-text" id="stageProgress">Etapa ${Math.min(current+1,n)}/${n} · ${progress(t)} concluídas</div></div>
 
       <div class="pause-hero">
         <div>
@@ -170,7 +181,7 @@ function renderTask(){
           <strong>Parei aqui</strong>
           <span>Guarde onde você está para retomar depois.</span>
         </div>
-        <button class="pause pause-hero-btn" id="pause">Ⅱ&nbsp; Parei aqui</button>
+        <div class="task-main-actions"><button class="pause pause-hero-btn" id="pause">Ⅱ&nbsp; Parei aqui</button><button class="complete-task-btn" id="completeTask">✓ Concluir tarefa</button></div>
       </div>
 
       <div class="task-focus compact-focus">
@@ -205,6 +216,22 @@ function renderTask(){
     t.current=index;save();render();
   });
   document.querySelector("#pause").onclick=()=>openPause(t,current);
+  document.querySelector("#completeTask").onclick=()=>completeTask(t);
+}
+
+function completeTask(t){
+  const remaining=t.stages.filter(s=>!s.done).length;
+  const message=remaining>0
+    ? `Ainda há ${remaining} etapa(s) não concluída(s). Deseja concluir a tarefa inteira mesmo assim?`
+    : `Marcar “${t.name}” como concluída?`;
+  if(!confirm(message)) return;
+  t.completed=true;
+  t.completedAt=Date.now();
+  t.stopAt=null;
+  save();
+  taskTab="completed";
+  navigate("tasks",null);
+  toast("Tarefa concluída e guardada em Concluídas.");
 }
 
 function cloneTask(t,p,fromList=false){

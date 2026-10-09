@@ -1,4 +1,4 @@
-const CACHE="fio-v7-flow";
+const CACHE="fio-v8-completed-tasks";
 const ASSETS=[
   "./","./index.html","./styles.css","./app.js","./manifest.webmanifest",
   "./icons/icon-192.png","./icons/icon-512.png","./icons/icon-192-maskable.png","./icons/icon-512-maskable.png","./icons/apple-touch-icon-180.png","./icons/apple-touch-icon.png"

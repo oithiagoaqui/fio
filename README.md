@@ -1,6 +1,6 @@
 # FIO — guarde o fio para depois
 
-Protótipo web funcional do App 2.
+Protótipo web funcional do App 2 — versão 8.
 
 ## Conceito
 
@@ -12,7 +12,10 @@ O FIO é uma memória externa para não perder o fio de uma tarefa. A pessoa cri
 - Se existir um ponto de parada salvo, o FIO abre diretamente na tela **“Você estava aqui.”** na próxima abertura.
 - Timeline vertical de etapas, com um elemento visual de fio/espiral.
 - A timeline é vertical e pode ser percorrida por rolagem normal; não há gesto de arrastar a linha para mudar de etapa.
-- **Concluir etapa** avança o fio.
+- Tocar na etapa atual conclui essa etapa e avança o fio.
+- Indicador de etapa atual atualizado em tempo real (ex.: Etapa 2/6).
+- **Concluir tarefa** arquiva a tarefa na aba **Concluídas**, preservando todos os dados.
+- Tarefas concluídas podem ser consultadas, reabertas ou excluídas separadamente.
 - **Parei aqui** salva o contexto para uma retomada orientada.
 - **Clonar tarefa** cria uma cópia limpa da tarefa.
 - **Excluir tarefa** remove a tarefa após confirmação.
@@ -133,3 +136,11 @@ O manifest separa explicitamente os propósitos `any` e `maskable`.
 - Removida a rolagem interna da timeline: a página usa a rolagem normal do dispositivo.
 - A timeline ficou mais compacta para reduzir a necessidade de rolar.
 - O acesso a **Início** ficou maior e mais visível nas telas de tarefa e retomada.
+
+## Versão 8 — indicador de etapa e tarefas concluídas
+- O indicador no topo da tarefa mostra a etapa selecionada/atual em relação ao total (ex.: `Etapa 2/6`) e a quantidade concluída.
+- Tarefas antigas sem o campo `completed` continuam sendo consideradas em andamento.
+- O botão **Concluir tarefa** permite arquivar uma tarefa inteira. Se houver etapas pendentes, o FIO pede confirmação antes de concluir mesmo assim.
+- A lista de tarefas tem abas **Em andamento** e **Concluídas**.
+- Tarefas concluídas permanecem salvas e podem ser consultadas, reabertas ou excluídas.
+- A chave local `fio-data-v2` e o formato-base dos dados foram preservados para manter compatibilidade com os registros existentes.
